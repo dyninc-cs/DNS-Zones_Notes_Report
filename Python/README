@@ -1,0 +1,42 @@
+This script prints out the notes of the users zone with the option to print to a file
+
+The credentials are read in from a configuration file in the same directory.
+
+The file is named credentials.cfg in the format:
+
+[Dynect]
+user: user_name
+customer: customer_name
+password: password
+
+Usage: %python znr.py [-z]
+
+Options
+    -h, --help                  show the help message and exit
+    -z ZONE_NAME, --zone_name=ZONE_NAME
+                                search for zone report with zone name
+    -l LIMIT, --limit=LIMIT
+                                the maximum number of notes to retrieve
+    -f FILE, --file=FILE        file to output to
+
+    The library is avaiable at:
+    https://github.com/dyninc/Dynect-API-Python-Library
+
+========================================================================================
+
+Usage Scenarios:
+
+To get help on this script, run this command:
+% python znr.py -h
+
+To search for notes on a zone, run this command:
+% python znr.py -z <zone name>
+
+To search for notes on a zone and print output to a file, run this command:
+% python znr.py -z <zone name> -f <file to output to>
+
+To search for notes on a zone and change the limit of notes retrieved, run this command:
+% python znr.py -z <zone name> -l <number>
+
+To search for notes on a zone, change the limit of the notes retrieved, and print output to a file, run this command:
+% python znr.py -z <zone name> -l <number> -f <file to output to>
