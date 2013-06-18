@@ -174,17 +174,21 @@ sub api_fail {
 				print "\tSource: $msgref->{'SOURCE'}\n" if $msgref->{'SOURCE'};
 			};
 			#api logout or fail
-			%api_param = ();
-			my $zone_uri = "https://api2.dynect.net/REST/Session";
-			my $api_decode = &api_request("$zone_uri", 'PUT', %api_param); 
+			$api_request = HTTP::Request->new('DELETE','https://api2.dynect.net/REST/Session');
+			$api_request->header ( 'Content-Type' => 'application/json', 'Auth-Token' => $$api_keyref );
+			$api_result = $api_lwp->request( $api_request );
 			$api_decode = decode_json ( $api_result->content);
 			exit;
 		}
 		else {
 			sleep(5);
 			my $job_uri = "https://api2.dynect.net/REST/Job/$api_jsonref->{'job_id'}/";
-			$api_jsonref = &api_request("$job_uri", 'GET', %api_param); 
+			$api_request = HTTP::Request->new('GET',$job_uri);
+			$api_request->header ( 'Content-Type' => 'application/json', 'Auth-Token' => $$api_keyref );
+			$api_result = $api_lwp->request( $api_request );
+			$api_jsonref = decode_json( $api_result->content );
 		}
 	}
 	$api_jsonref;
 }
+
