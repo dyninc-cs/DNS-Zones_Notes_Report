@@ -151,7 +151,7 @@ function api_request($zone_uri, $req_type, $api_params, $token)
 }
 
 #Expects 2 variable, first a reference to the API key and second a reference to the decoded JSON response
-function api_fail($api_keyref, $api_jsonref) 
+function api_fail($token, $api_jsonref) 
 {
 	#loop until the job id comes back as success or program dies
 	while ( $api_jsonref->status != 'success' ) {
