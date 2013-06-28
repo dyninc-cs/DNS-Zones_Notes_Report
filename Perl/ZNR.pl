@@ -8,47 +8,44 @@
 #customer: customer_name
 #password: password
 
-#Usage: %perl ZNR.pl  [-z]
+#Usage: %perl ZNR.pl  -z example.com [-l 10] 
 
 #Options
 #-h, --help			Show the help message and exit
-#-z --zone_name	ZONE_NAME	Search for zone report with zone name
-#-l --limit	LIMIT 		The maximum number of notes to retrieve
-#-f --file	FILE    	File to output to
+#-z --zone			Search for zone report with zone name
+#-l --limit	 		The maximum number of notes to retrieve
 use warnings;
 use strict;
-use Data::Dumper;
-use XML::Simple;
 use Config::Simple;
-use Getopt::Long qw(:config no_ignore_case);
+use Data::Dumper;
+use Getopt::Long;
 use LWP::UserAgent;
 use JSON;
+use Text::CSV;
+use POSIX qw( strftime );
+
 
 #Get Options
-my $opt_list=0;
+my $opt_list=0; #Set to 0 to check if necessary to send limit
 my $opt_zone;
-my $opt_file="";
 my $opt_help;
 my $notelist;
 
 GetOptions(
 	'help' => \$opt_help,
 	'limit=i' => \$opt_list,
-	'file=s' => \$opt_file,
-	'zone_name=s' =>\$opt_zone,
+	'zone=s' =>\$opt_zone,
 );
 
 #Printing help menu
 if ($opt_help) {
-	print "\tAPI integration requires paramaters stored in config.cfg\n\n";
-
 	print "\tOptions:\n";
 	print "\t\t-h, --help\t\t Show the help message and exit\n";
-	print "\t\t-l, --limit\t\t Set the maximum number of notes to retrieve\n";
-	print "\t\t-n, --file\t\t Set the file to output\n";
-	print "\t\t-Z, --zone_name\t\t Name of zone\n\n";
+	print "\t\t-l, --limit\t\t Set the maximum number of notes to retrieve (Newest first)\n";
+	print "\t\t-z, --zone\t\t Name of zone (Required)\n\n";
 	exit;
 }
+
 
 #Create config reader
 my $cfg = new Config::Simple();
@@ -78,31 +75,26 @@ my $session_uri = 'https://api2.dynect.net/REST/Session';
 my %api_param = ( 
 	'customer_name' => $apicn,
 	'user_name' => $apiun,
-	'password' => $apipw,
-);
-
-#API Login
+	'password' => $apipw,);
 my $api_request = HTTP::Request->new('POST',$session_uri);
 $api_request->header ( 'Content-Type' => 'application/json' );
 $api_request->content( to_json( \%api_param ) );
-
 my $api_lwp = LWP::UserAgent->new;
 my $api_result = $api_lwp->request( $api_request );
-
 my $api_decode = decode_json ( $api_result->content ) ;
-my $api_key = $api_decode->{'data'}->{'token'};
+my $api_token = $api_decode->{'data'}->{'token'};
 
-#Set param to empty
-%api_param = ();
-$session_uri = "https://api2.dynect.net/REST/NodeList/$opt_zone";
-$api_decode = &api_request($session_uri, 'GET', %api_param);
-#Print out the nodes in the zone
-$notelist .= "=======Nodes=======\n";
-foreach my $nodeIn (@{$api_decode->{'data'}})
-{
-	#Print each node	
-	$notelist .= "$nodeIn\n";
-}
+# Setting up new csv file
+my $opt_file = "notes_$opt_zone.csv";
+my $fh;
+my $csv = Text::CSV->new ( { binary => 1, eol => "\n" } ) or die "Cannot use CSV: ".Text::CSV->error_diag ();;
+$csv->column_names('User', 'Timestamp');
+open $fh, ">", $opt_file  or die "new.csv: $!";
+print "Writing CSV file to: $opt_file\n";
+
+# Setting header information
+$csv->print($fh, [ "User", "Type", "When", "Note"]);
+
 
 #If -l is set then send then limit. If it is not, assume no limit.
 if($opt_list!=0)
@@ -110,28 +102,29 @@ if($opt_list!=0)
 else
 	{%api_param = (zone => $opt_zone);}
 $session_uri = "https://api2.dynect.net/REST/ZoneNoteReport";
-$api_decode = &api_request($session_uri, 'POST', %api_param); 
+$api_decode = &api_request($session_uri, 'POST', $api_token, %api_param); 
 
 
 #Print out the zone, type, time and note to the user/file
-$notelist .= "\n=====Zone Name=====\n$opt_zone\n\n";
 foreach my $zoneIn (@{$api_decode->{'data'}})
 {
-	$notelist .= "=======Type========\n" . $zoneIn->{'user_name'} . "\n";
-	$notelist .= "=====Timestamp=====\n" . $zoneIn->{'timestamp'} . "\n";
-	$notelist .= "=======Note========\n".$zoneIn->{'note'} . "\n";
+	my $user =  $zoneIn->{'user_name'};
+	my $type = $zoneIn->{'type'};
+	my $time = $zoneIn->{'timestamp'};
+	my $note = $zoneIn->{'note'};
+	$time = strftime("%b %d, %Y (%H:%M - UTC)", gmtime($time));
+	chomp $note;
+	$csv->print ($fh, [ $user, $type, $time, $note ] );
 }
 
-#Print the notes to the user and write to file if user has set a file name
-print $notelist;
-&write_file( $opt_file, \$notelist) unless ($opt_file eq "");
+# Close csv file
+close $fh or die "$!";
+print "CSV file write sucessful.\n";
 
 #api logout
 %api_param = ();
 $session_uri = 'https://api2.dynect.net/REST/Session';
-&api_request($session_uri, 'DELETE', %api_param); 
-
-
+&api_request($session_uri, 'DELETE',  $api_token, %api_param); 
 
 #Writes to file using the filename and the string built file.
 sub write_file{
@@ -140,16 +133,15 @@ sub write_file{
 	print $fh $$notelist_ref ;
 }
 
-#Accepts Zone URI, Request Type, and Any Parameters
+#Accepts Zone URI, Request Type, API Key, and Any Parameters
 sub api_request{
 	#Get in variables, send request, send parameters, get result, decode, display if error
-	my ($zone_uri, $req_type, %api_param) = @_;
-	$api_request = HTTP::Request->new($req_type, $zone_uri);
+	my ($api_uri, $req_type, $api_key, %api_param) = @_;
+	$api_request = HTTP::Request->new($req_type, $api_uri);
 	$api_request->header ( 'Content-Type' => 'application/json', 'Auth-Token' => $api_key );
 	$api_request->content( to_json( \%api_param ) );
 	$api_result = $api_lwp->request($api_request);
 	$api_decode = decode_json( $api_result->content);
-	#print $api_result->content . "\n";
 	$api_decode = &api_fail(\$api_key, $api_decode) unless ($api_decode->{'status'} eq 'success');
 	return $api_decode;
 }
