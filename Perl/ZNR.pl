@@ -126,12 +126,6 @@ print "CSV file write sucessful.\n";
 $session_uri = 'https://api2.dynect.net/REST/Session';
 &api_request($session_uri, 'DELETE',  $api_token, %api_param); 
 
-#Writes to file using the filename and the string built file.
-sub write_file{
-	my( $opt_file, $notelist_ref ) = @_ ;
-	open( my $fh, ">$opt_file" ) || die "can't create $opt_file $!" ;
-	print $fh $$notelist_ref ;
-}
 
 #Accepts Zone URI, Request Type, API Key, and Any Parameters
 sub api_request{
