@@ -1,31 +1,28 @@
 #!/usr/bin/php
 <?php
-#This script prints out the notes of your zone with the option to print to a file.
+#This script writes the notes of your zone to a CSV file. You can limit the number of notes requested.
 #The credentials are read in from a configuration file in the same directory.
-#The file is named credentials.cfg in the format:
+#The file is named config.ini.
 
 #Usage: %php znr.php  [-z]
 #Options:
 #-h, --help		Show this help message and exit
 #-z, --zones		Output all zones
 #-l, --limit		Set the maximum number of notes to retrieve
-#-f, --file		File to output list to
 
 #Get options from command line
-$shortopts .= "f:"; 
 $shortopts .= "z:"; 
 $shortopts .= "l:";  
 $shortopts .= "h"; 
 $longopts  = array(
-			"file::",	
 			"zones::",
 			"limit::",   
 			"help",);	
 $options = getopt($shortopts, $longopts);
-#Set file to -f
-$opt_file .= $options["f"]; 
+
 $opt_limit .= $options["l"]; 
 $opt_zone .= $options["z"]; 
+date_default_timezone_set('UTC'); #Sets timezone to UTC for datetime
 
 #Print help menu
 if (is_bool($options["h"])) {
@@ -33,8 +30,7 @@ if (is_bool($options["h"])) {
         print "\tOptions:\n";
         print "\t\t-h, --help\t\t Show the help message and exit\n";
         print "\t\t-l, --limit\t\t Set the maximum number of notes to retrieve\n";
-        print "\t\t-n, --file\t\t Set the file to output\n";
-        print "\t\t-Z, --zone_name\t\t Name of zone\n\n";
+        print "\t\t-z, --zone_name\t\t Name of zone\n\n";
         exit;}
 		
 # Parse ini file (can fail)
@@ -44,15 +40,12 @@ $api_cn = $ini_array['cn'] or die("Customer Name required in config.ini for API 
 $api_un = $ini_array['un'] or die("User Name required in config.ini for API login\n");
 $api_pw = $ini_array['pw'] or die("Password required in config.ini for API login\n");	
 
-# Prevent the user from proceeding if they have not entered -n or -z
+# Prevent the user from proceeding if they have not entered -z
 if($opt_zone == "")
 {
 	print "You must enter \"-z [example.com]\"\n";
 	exit;
 }
-
-#If the file is to be written to file, start ob
-if(is_string($options["f"])){ob_start();}
 
 # Log into DYNECT
 # Create an associative array with the required arguments
@@ -64,30 +57,13 @@ $session_uri = 'https://api2.dynect.net/REST/Session/';
 $decoded_result = api_request($session_uri, 'POST', $api_params,  $token);	
 
 #Set the token
-if($decoded_result->status == 'success')
+if($decoded_result->status == 'success')	
 	{$token = $decoded_result->data->token;}
-else
-{
-	#Print the result if it's an error
-	foreach($decoded_result->msgs as $message)
-		{print $message->LVL.": ".($message->ERR_CD != '' ? '('.$message->ERR_CD.') ' : '').$message->SOURCE." - ".$message->INFO."\n\n";}
-	exit;
-}
 
-
-# Zone URI & Empty Params	
-$session_uri = 'https://api2.dynect.net/REST/Zone/'; 
-$api_params = array (''=>'');
-$decoded_result = api_request($session_uri, 'GET', $api_params,  $token);	
-
-
-# Print nodes to user 
-print "=======Nodes=======\n";
-$session_uri = 'https://api2.dynect.net/REST/NodeList/'. $opt_zone . '/'; 
-$api_params = array (''=>'');
-$decoded_result = api_request($session_uri, 'GET', $api_params,  $token);	
-foreach($decoded_result->data as $nodein)
-	{print $nodein. "\n";}
+# Setting file name and opening file for writing
+$opt_file = "notes_$opt_zone.csv";
+$fp = fopen($opt_file, 'w') or die;
+print "Writing CSV file to: $opt_file\n";
 
 #If -l is set then send then limit. If it is not, assume no limit.
 if($opt_limit!=0)
@@ -95,38 +71,27 @@ if($opt_limit!=0)
 else
         {$api_param = array('zone' => $opt_zone);}
 
-#Print out the zone, type, time and note to the user
 $session_uri = "https://api2.dynect.net/REST/ZoneNoteReport";
 $decoded_result = api_request($session_uri, 'POST', $api_param, $token);
-print "\n=====Zone Name=====\n$opt_zone\n\n";
 foreach ($decoded_result->data as $zoneIn)
 {
-        print "=======Type========\n" . $zoneIn->user_name . "\n";
-        print "=====Timestamp=====\n" . $zoneIn->timestamp . "\n";
-        print "=======Note========\n" . $zoneIn->note . "\n";
+        $user = $zoneIn->user_name;
+	$type = $zoneIn->type;
+        $note =  $zoneIn->note;
+	$note = rtrim($note);
+        $time =  $zoneIn->timestamp;
+	$dt = new DateTime("@$time"); # Set epoch time to datetime
+	$time=  $dt->format('M d, Y (H:i - \U\T\C)'); # Format date
+	fputcsv($fp, array($user, $type, $time, $note)); #Send evertying in the array to the csv
 }
 
-
-#If -f is set, send the output to the file
-if(is_string($options['f']))
-{
-	$output = ob_get_contents();
-	ob_end_flush();
-	$fp = fopen($opt_file,"w");
-	fwrite($fp,$output);
-	fclose($fp);
-}
+fclose($fp);
+print "CSV file write sucessful.";
 
 # Logging Out
 $session_uri = 'https://api2.dynect.net/REST/Session/'; 
 $api_params = array (''=>'');
 $decoded_result = api_request($session_uri, 'DELETE', $api_params,  $token);	
-#Print result if error occurs
-if($decoded_result->status != 'success')
-{
-	foreach($decoded_result->msgs as $message)
-		{print $message->LVL.": ".($message->ERR_CD != '' ? '('.$message->ERR_CD.') ' : '').$message->SOURCE." - ".$message->INFO."\n";}
-}
 
 # Function that takes zone uri, request type, parameters, and token.
 # Returns the decoded result
