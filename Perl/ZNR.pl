@@ -1,39 +1,44 @@
 #!/usr/bin/perl
 #This script prints out the notes of your zone with the option to print to a file.
 #The credentials are read in from a configuration file in the same directory.
-#The file is named credentials.cfg in the format:
+#The file is named config.cfg in the format:
 
 #[Dynect]
 #user: user_name
 #customer: customer_name
 #password: password
 
-#Usage: %perl ZNR.pl  -z example.com [-l 10] 
+#Usage: %perl ZNR.pl  -z example.com [-l 10] [-e] [-f zone_notes.csv]
 
-#Options
-#-h, --help			Show the help message and exit
-#-z --zone			Search for zone report with zone name
-#-l --limit	 		The maximum number of notes to retrieve
+# Options
+# -h --help			Show the help message and exit
+# -z --zone			Search for zone report with zone name
+# -l --limit	 		The maximum number of notes to retrieve
+# -e --epoch			Use epoch time instead of a formated time";
+# -f --file			Set file name. Default: notes_[zonename].csv";
+
 use warnings;
 use strict;
 use Config::Simple;
-use Data::Dumper;
 use Getopt::Long;
 use LWP::UserAgent;
 use JSON;
 use Text::CSV;
 use POSIX qw( strftime );
 
-
 #Get Options
-my $opt_list=0; #Set to 0 to check if necessary to send limit
-my $opt_zone;
+my $opt_list=0; #Initalized to check if limit is set
+my $opt_file=""; #Initalized to see check against optfile being set
+my $opt_zone="";
 my $opt_help;
+my $opt_epoch;
 my $notelist;
 
 GetOptions(
 	'help' => \$opt_help,
+	'epoch' => \$opt_epoch,
 	'limit=i' => \$opt_list,
+	'file=s' => \$opt_file,
 	'zone=s' =>\$opt_zone,
 );
 
@@ -41,11 +46,19 @@ GetOptions(
 if ($opt_help) {
 	print "\tOptions:\n";
 	print "\t\t-h, --help\t\t Show the help message and exit\n";
+	print "\t\t-e, --epoch\t\t Use epoch time instead of a formated time\n";
+	print "\t\t-f, --file\t\t Set file name. Default: notes_[zonename].csv\n";
 	print "\t\t-l, --limit\t\t Set the maximum number of notes to retrieve (Newest first)\n";
 	print "\t\t-z, --zone\t\t Name of zone (Required)\n\n";
 	exit;
 }
 
+#Checking if -z is set
+elsif ($opt_zone eq "")
+{
+	print "Zonename needs to be set. Use \"-z [zonename]\"\n";
+	exit;
+}
 
 #Create config reader
 my $cfg = new Config::Simple();
@@ -85,10 +98,9 @@ my $api_decode = decode_json ( $api_result->content ) ;
 my $api_token = $api_decode->{'data'}->{'token'};
 
 # Setting up new csv file
-my $opt_file = "notes_$opt_zone.csv";
+$opt_file = "notes_$opt_zone.csv" unless($opt_file ne ""); #Set filename if -f else, use default
 my $fh;
-my $csv = Text::CSV->new ( { binary => 1, eol => "\n" } ) or die "Cannot use CSV: ".Text::CSV->error_diag ();;
-$csv->column_names('User', 'Timestamp');
+my $csv = Text::CSV->new ( { binary => 1, eol => "\n" } ) or die "Cannot use CSV: ".Text::CSV->error_diag ();
 open $fh, ">", $opt_file  or die "new.csv: $!";
 print "Writing CSV file to: $opt_file\n";
 
@@ -104,16 +116,15 @@ else
 $session_uri = "https://api2.dynect.net/REST/ZoneNoteReport";
 $api_decode = &api_request($session_uri, 'POST', $api_token, %api_param); 
 
-
 #Print out the zone, type, time and note to the user/file
 foreach my $zoneIn (@{$api_decode->{'data'}})
 {
-	my $user =  $zoneIn->{'user_name'};
+	my $user = $zoneIn->{'user_name'};
 	my $type = $zoneIn->{'type'};
 	my $time = $zoneIn->{'timestamp'};
 	my $note = $zoneIn->{'note'};
-	$time = strftime("%b %d, %Y (%H:%M - UTC)", gmtime($time));
 	chomp $note;
+	$time = strftime("%b %d, %Y (%H:%M - UTC)", gmtime($time)) unless($opt_epoch); #Set formatted time unless -e
 	$csv->print ($fh, [ $user, $type, $time, $note ] );
 }
 
