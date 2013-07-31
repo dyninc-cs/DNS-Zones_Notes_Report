@@ -1,14 +1,16 @@
 #!/usr/bin/perl
-#This script prints out the notes of your zone with the option to print to a file.
+#This script sends the notes of your zone to a CSV file. Inputting a zone is required. 
+#You can set a limit of notes to display and epoch time if preffered.
 #The credentials are read in from a configuration file in the same directory.
 #The file is named config.cfg in the format:
 
 #[Dynect]
-#user: user_name
-#customer: customer_name
-#password: password
+#cn: customer_name
+#un: user_name
+#pw: password
 
-#Usage: %perl ZNR.pl  -z example.com [-l 10] [-e] [-f zone_notes.csv]
+#Usage: %perl ZNR.pl -z example.com [-l 10] [-e] [-f zone_notes.csv]
+#This will print to the file zone_notes.csv to a CSV file with a limit of 10 notes and epoch time.
 
 # Options
 # -h --help			Show the help message and exit
