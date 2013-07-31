@@ -1,52 +1,64 @@
 #!/usr/bin/perl
-#This script prints out the notes of your zone with the option to print to a file.
+#This script sends the notes of your zone to a CSV file. Inputting a zone is required. 
+#You can set a limit of notes to display and epoch time if preffered.
 #The credentials are read in from a configuration file in the same directory.
-#The file is named credentials.cfg in the format:
+#The file is named config.cfg in the format:
 
 #[Dynect]
-#user: user_name
-#customer: customer_name
-#password: password
+#cn: customer_name
+#un: user_name
+#pw: password
 
-#Usage: %perl ZNR.pl  [-z]
+#Usage: %perl ZNR.pl -z example.com [-l 10] [-e] [-f zone_notes.csv]
+#This will print to the file zone_notes.csv to a CSV file with a limit of 10 notes and epoch time.
 
-#Options
-#-h, --help			Show the help message and exit
-#-z --zone_name	ZONE_NAME	Search for zone report with zone name
-#-l --limit	LIMIT 		The maximum number of notes to retrieve
-#-f --file	FILE    	File to output to
+# Options
+# -h --help			Show the help message and exit
+# -z --zone			Search for zone report with zone name
+# -l --limit	 		The maximum number of notes to retrieve
+# -e --epoch			Use epoch time instead of a formated time";
+# -f --file			Set file name. Default: notes_[zonename].csv";
+
 use warnings;
 use strict;
-use Data::Dumper;
-use XML::Simple;
 use Config::Simple;
-use Getopt::Long qw(:config no_ignore_case);
+use Getopt::Long;
 use LWP::UserAgent;
 use JSON;
+use Text::CSV;
+use POSIX qw( strftime );
 
 #Get Options
-my $opt_list=0;
-my $opt_zone;
-my $opt_file="";
+my $opt_list=0; #Initalized to check if limit is set
+my $opt_file=""; #Initalized to see check against optfile being set
+my $opt_zone="";
 my $opt_help;
+my $opt_epoch;
 my $notelist;
 
 GetOptions(
 	'help' => \$opt_help,
+	'epoch' => \$opt_epoch,
 	'limit=i' => \$opt_list,
 	'file=s' => \$opt_file,
-	'zone_name=s' =>\$opt_zone,
+	'zone=s' =>\$opt_zone,
 );
 
 #Printing help menu
 if ($opt_help) {
-	print "\tAPI integration requires paramaters stored in config.cfg\n\n";
-
 	print "\tOptions:\n";
 	print "\t\t-h, --help\t\t Show the help message and exit\n";
-	print "\t\t-l, --limit\t\t Set the maximum number of notes to retrieve\n";
-	print "\t\t-n, --file\t\t Set the file to output\n";
-	print "\t\t-Z, --zone_name\t\t Name of zone\n\n";
+	print "\t\t-e, --epoch\t\t Use epoch time instead of a formated time\n";
+	print "\t\t-f, --file\t\t Set file name. Default: notes_[zonename].csv\n";
+	print "\t\t-l, --limit\t\t Set the maximum number of notes to retrieve (Newest first)\n";
+	print "\t\t-z, --zone\t\t Name of zone (Required)\n\n";
+	exit;
+}
+
+#Checking if -z is set
+elsif ($opt_zone eq "")
+{
+	print "Zonename needs to be set. Use \"-z [zonename]\"\n";
 	exit;
 }
 
@@ -78,31 +90,25 @@ my $session_uri = 'https://api2.dynect.net/REST/Session';
 my %api_param = ( 
 	'customer_name' => $apicn,
 	'user_name' => $apiun,
-	'password' => $apipw,
-);
-
-#API Login
+	'password' => $apipw,);
 my $api_request = HTTP::Request->new('POST',$session_uri);
 $api_request->header ( 'Content-Type' => 'application/json' );
 $api_request->content( to_json( \%api_param ) );
-
 my $api_lwp = LWP::UserAgent->new;
 my $api_result = $api_lwp->request( $api_request );
-
 my $api_decode = decode_json ( $api_result->content ) ;
-my $api_key = $api_decode->{'data'}->{'token'};
+my $api_token = $api_decode->{'data'}->{'token'};
 
-#Set param to empty
-%api_param = ();
-$session_uri = "https://api2.dynect.net/REST/NodeList/$opt_zone";
-$api_decode = &api_request($session_uri, 'GET', %api_param);
-#Print out the nodes in the zone
-$notelist .= "=======Nodes=======\n";
-foreach my $nodeIn (@{$api_decode->{'data'}})
-{
-	#Print each node	
-	$notelist .= "$nodeIn\n";
-}
+# Setting up new csv file
+$opt_file = "notes_$opt_zone.csv" unless($opt_file ne ""); #Set filename if -f else, use default
+my $fh;
+my $csv = Text::CSV->new ( { binary => 1, eol => "\n" } ) or die "Cannot use CSV: ".Text::CSV->error_diag ();
+open $fh, ">", $opt_file  or die "new.csv: $!";
+print "Writing CSV file to: $opt_file\n";
+
+# Setting header information
+$csv->print($fh, [ "User", "Type", "When", "Note"]);
+
 
 #If -l is set then send then limit. If it is not, assume no limit.
 if($opt_list!=0)
@@ -110,46 +116,39 @@ if($opt_list!=0)
 else
 	{%api_param = (zone => $opt_zone);}
 $session_uri = "https://api2.dynect.net/REST/ZoneNoteReport";
-$api_decode = &api_request($session_uri, 'POST', %api_param); 
-
+$api_decode = &api_request($session_uri, 'POST', $api_token, %api_param); 
 
 #Print out the zone, type, time and note to the user/file
-$notelist .= "\n=====Zone Name=====\n$opt_zone\n\n";
 foreach my $zoneIn (@{$api_decode->{'data'}})
 {
-	$notelist .= "=======Type========\n" . $zoneIn->{'user_name'} . "\n";
-	$notelist .= "=====Timestamp=====\n" . $zoneIn->{'timestamp'} . "\n";
-	$notelist .= "=======Note========\n".$zoneIn->{'note'} . "\n";
+	my $user = $zoneIn->{'user_name'};
+	my $type = $zoneIn->{'type'};
+	my $time = $zoneIn->{'timestamp'};
+	my $note = $zoneIn->{'note'};
+	chomp $note;
+	$time = strftime("%b %d, %Y (%H:%M - UTC)", gmtime($time)) unless($opt_epoch); #Set formatted time unless -e
+	$csv->print ($fh, [ $user, $type, $time, $note ] );
 }
 
-#Print the notes to the user and write to file if user has set a file name
-print $notelist;
-&write_file( $opt_file, \$notelist) unless ($opt_file eq "");
+# Close csv file
+close $fh or die "$!";
+print "CSV file write sucessful.\n";
 
 #api logout
 %api_param = ();
 $session_uri = 'https://api2.dynect.net/REST/Session';
-&api_request($session_uri, 'DELETE', %api_param); 
+&api_request($session_uri, 'DELETE',  $api_token, %api_param); 
 
 
-
-#Writes to file using the filename and the string built file.
-sub write_file{
-	my( $opt_file, $notelist_ref ) = @_ ;
-	open( my $fh, ">$opt_file" ) || die "can't create $opt_file $!" ;
-	print $fh $$notelist_ref ;
-}
-
-#Accepts Zone URI, Request Type, and Any Parameters
+#Accepts Zone URI, Request Type, API Key, and Any Parameters
 sub api_request{
 	#Get in variables, send request, send parameters, get result, decode, display if error
-	my ($zone_uri, $req_type, %api_param) = @_;
-	$api_request = HTTP::Request->new($req_type, $zone_uri);
+	my ($api_uri, $req_type, $api_key, %api_param) = @_;
+	$api_request = HTTP::Request->new($req_type, $api_uri);
 	$api_request->header ( 'Content-Type' => 'application/json', 'Auth-Token' => $api_key );
 	$api_request->content( to_json( \%api_param ) );
 	$api_result = $api_lwp->request($api_request);
 	$api_decode = decode_json( $api_result->content);
-	#print $api_result->content . "\n";
 	$api_decode = &api_fail(\$api_key, $api_decode) unless ($api_decode->{'status'} eq 'success');
 	return $api_decode;
 }
@@ -174,17 +173,21 @@ sub api_fail {
 				print "\tSource: $msgref->{'SOURCE'}\n" if $msgref->{'SOURCE'};
 			};
 			#api logout or fail
-			%api_param = ();
-			my $zone_uri = "https://api2.dynect.net/REST/Session";
-			my $api_decode = &api_request("$zone_uri", 'PUT', %api_param); 
+			$api_request = HTTP::Request->new('DELETE','https://api2.dynect.net/REST/Session');
+			$api_request->header ( 'Content-Type' => 'application/json', 'Auth-Token' => $$api_keyref );
+			$api_result = $api_lwp->request( $api_request );
 			$api_decode = decode_json ( $api_result->content);
 			exit;
 		}
 		else {
 			sleep(5);
 			my $job_uri = "https://api2.dynect.net/REST/Job/$api_jsonref->{'job_id'}/";
-			$api_jsonref = &api_request("$job_uri", 'GET', %api_param); 
+			$api_request = HTTP::Request->new('GET',$job_uri);
+			$api_request->header ( 'Content-Type' => 'application/json', 'Auth-Token' => $$api_keyref );
+			$api_result = $api_lwp->request( $api_request );
+			$api_jsonref = decode_json( $api_result->content );
 		}
 	}
 	$api_jsonref;
 }
+
