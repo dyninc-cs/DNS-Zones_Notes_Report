@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #This script sends the notes of your zone to a CSV file. Inputting a zone is required. 
-#You can set a limit of notes to display and epoch time if preffered.
+#You can set a limit of notes to display and epoch time if preferred.
 #The credentials are read in from a configuration file in the same directory.
 #The file is named config.cfg in the format:
 
@@ -16,8 +16,8 @@
 # -h --help			Show the help message and exit
 # -z --zone			Search for zone report with zone name
 # -l --limit	 		The maximum number of notes to retrieve
-# -e --epoch			Use epoch time instead of a formated time";
-# -f --file			Set file name. Default: notes_[zonename].csv";
+# -e --epoch			Use epoch time instead of a formatted time
+# -f --file			Set file name. Default: notes_[zonename].csv
 
 use warnings;
 use strict;
@@ -30,8 +30,8 @@ use POSIX qw( strftime );
 
 #Get Options
 my $opt_list=0; #Initalized to check if limit is set
-my $opt_file=""; #Initalized to see check against optfile being set
-my $opt_zone="";
+my $opt_file=""; #Initalized to see check against opt_file being set
+my $opt_zone=""; #Initalized to see check against opt_zone being set
 my $opt_help;
 my $opt_epoch;
 my $notelist;
@@ -48,7 +48,7 @@ GetOptions(
 if ($opt_help) {
 	print "\tOptions:\n";
 	print "\t\t-h, --help\t\t Show the help message and exit\n";
-	print "\t\t-e, --epoch\t\t Use epoch time instead of a formated time\n";
+	print "\t\t-e, --epoch\t\t Use epoch time instead of a formatted time\n";
 	print "\t\t-f, --file\t\t Set file name. Default: notes_[zonename].csv\n";
 	print "\t\t-l, --limit\t\t Set the maximum number of notes to retrieve (Newest first)\n";
 	print "\t\t-z, --zone\t\t Name of zone (Required)\n\n";
