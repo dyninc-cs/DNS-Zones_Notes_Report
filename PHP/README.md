@@ -1,0 +1,52 @@
+Dyn Inc, Integration Team Deliverable
+"Copyright © 2013, Dyn Inc.
+All rights reserved.
+ 
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+ 
+* Redistributions of source code must retain the above copyright notice,
+  this list of conditions and the following disclaimer.
+ 
+* Redistributions in binary form must reproduce the above copyright
+  notice, this list of conditions and the following disclaimer in the
+  documentation and/or other materials provided with the distribution.
+ 
+* Neither the name of Dynamic Network Services, Inc. nor the names of
+  its contributors may be used to endorse or promote products derived
+  from this software without specific prior written permission.
+ 
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+
+___________________________________________________________________________________
+
+This script sends the notes of your zone to a CSV file. Inputting a zone is required.
+You can set a limit of notes to display and epoch time if preferred.
+The credentials are read in from a configuration file in the same directory.
+The file is named config.ini in the format:
+
+API Login Information
+cn= customer_name
+un= user_name
+pw= password
+
+Options
+-h            Show the help message and exit
+-z            Search for zone report with zone name
+-l            The maximum number of notes to retrieve
+-e            Use epoch time instead of a formatted time
+-f            Set file name. Default: notes_[zonename].csv
+
+Usage: %php znr.php -z example.com [-l 10] [-e] [-f zone_notes.csv]
+This will print to the file zone_notes.csv to a CSV file with a limit of 10 notes and epoch time.
