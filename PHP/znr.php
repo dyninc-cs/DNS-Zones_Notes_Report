@@ -1,37 +1,49 @@
 #!/usr/bin/php
 <?php
-#This script writes the notes of your zone to a CSV file. You can limit the number of notes requested.
+#!/usr/bin/perl
+#This script sends the notes of your zone to a CSV file. Inputting a zone is required. 
+#You can set a limit of notes to display and epoch time if preferred.
 #The credentials are read in from a configuration file in the same directory.
-#The file is named config.ini.
+#The file is named config.ini in the format:
 
-#Usage: %php znr.php  [-z]
-#Options:
-#-h, --help		Show this help message and exit
-#-z, --zones		Output all zones
-#-l, --limit		Set the maximum number of notes to retrieve
+#API Login Information
+#cn= customer_name
+#un= user_name
+#pw= password
+
+# Options
+# -h		Show the help message and exit
+# -z		Search for zone report with zone name
+# -l 		The maximum number of notes to retrieve
+# -e		Use epoch time instead of a formatted time
+# -f		Set file name. Default: notes_[zonename].csv
+
+#Usage: %php znr.php -z example.com [-l 10] [-e] [-f zone_notes.csv]
+#This will print to the file zone_notes.csv to a CSV file with a limit of 10 notes and epoch time.
 
 #Get options from command line
 $shortopts .= "z:"; 
 $shortopts .= "l:";  
+$shortopts .= "f:";  
+$shortopts .= "e";  
 $shortopts .= "h"; 
-$longopts  = array(
-			"zones::",
-			"limit::",   
-			"help",);	
-$options = getopt($shortopts, $longopts);
+$options = getopt($shortopts);
 
-$opt_limit .= $options["l"]; 
 $opt_zone .= $options["z"]; 
+$opt_limit .= $options["l"]; 
+$opt_file .= $options["f"]; 
+$opt_epoch .= $options["e"]; 
 date_default_timezone_set('UTC'); #Sets timezone to UTC for datetime
 
 #Print help menu
 if (is_bool($options["h"])) {
-	print "\tAPI integration requires paramaters stored in config.ini\n\n";
-        print "\tOptions:\n";
-        print "\t\t-h, --help\t\t Show the help message and exit\n";
-        print "\t\t-l, --limit\t\t Set the maximum number of notes to retrieve\n";
-        print "\t\t-z, --zone_name\t\t Name of zone\n\n";
-        exit;}
+        print "Options:\n";
+	print "-h\tShow the help message and exit\n";
+	print "-e\tUse epoch time instead of a formatted time\n";
+	print "-f\tSet file name. Default: notes_[zonename].csv\n";
+	print "-l\tSet the maximum number of notes to retrieve (Newest first)\n";
+	print "-z\tName of zone (Required)\n\n";
+	exit;}
 		
 # Parse ini file (can fail)
 #Set the values from file to variables or die
@@ -61,7 +73,8 @@ if($decoded_result->status == 'success')
 	{$token = $decoded_result->data->token;}
 
 # Setting file name and opening file for writing
-$opt_file = "notes_$opt_zone.csv";
+if($opt_file == "")
+	{$opt_file = "notes_$opt_zone.csv";}
 $fp = fopen($opt_file, 'w') or die;
 print "Writing CSV file to: $opt_file\n";
 
@@ -70,9 +83,10 @@ if($opt_limit!=0)
         {$api_param = array('zone' => $opt_zone, 'limit' => $opt_limit);}
 else
         {$api_param = array('zone' => $opt_zone);}
-
 $session_uri = "https://api2.dynect.net/REST/ZoneNoteReport";
 $decoded_result = api_request($session_uri, 'POST', $api_param, $token);
+
+# Go through the result assigning values to results
 foreach ($decoded_result->data as $zoneIn)
 {
         $user = $zoneIn->user_name;
@@ -81,11 +95,14 @@ foreach ($decoded_result->data as $zoneIn)
 	$note = rtrim($note);
         $time =  $zoneIn->timestamp;
 	$dt = new DateTime("@$time"); # Set epoch time to datetime
-	$time=  $dt->format('M d, Y (H:i - \U\T\C)'); # Format date
+	#If epoch is set dont format the time
+	if(!is_bool($options['e']))
+		{$time=  $dt->format('M d, Y (H:i - \U\T\C)');} # Format date
 	fputcsv($fp, array($user, $type, $time, $note)); #Send evertying in the array to the csv
 }
 
-fclose($fp);
+#Close file and let user know
+fclose($fp) or die("Could not close file $opt_file");
 print "CSV file write sucessful.";
 
 # Logging Out
@@ -143,8 +160,6 @@ function api_fail($token, $api_jsonref)
         }
         return $api_jsonref;
 }
-
-
 ?>
 
 
