@@ -125,7 +125,6 @@ function api_request($zone_uri, $req_type, $api_params, $token)
 	
 	$http_result = curl_exec($ch);
 	$decoded_result = json_decode($http_result); # Decode from JSON as our results are in the same format as our request
-	
 	if($decoded_result->status != 'success')
 		{$decoded_result = api_fail($token, $decoded_result);}  	
 	
