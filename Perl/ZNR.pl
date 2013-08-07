@@ -132,3 +132,4 @@ print "CSV file write sucessful.\n";
 
 #API logout
 $dynect->logout;
+
